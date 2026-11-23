@@ -5,6 +5,7 @@ import pytest
 
 from processador.validacao import (
     COLUNAS_ESPERADAS,
+    CsvMalFormado,
     decodificar,
     ler_csv,
     validar,
@@ -63,6 +64,25 @@ def test_ler_csv_vazio_devolve_dataframe_sem_colunas():
     df = ler_csv(ler_fixture("anp_vazio.csv"))
     assert df.empty
     assert len(df.columns) == 0
+
+
+@pytest.mark.parametrize(
+    ("conteudo", "trecho"),
+    [
+        (b"a;b\r\n1;2\r\n1;2;3\r\n", "linha 3: esperados 2 campos, encontrados 3"),
+        (b"a;b\r\n1;2;3;4\r\n", "linha 2: esperados 2 campos, encontrados 4"),
+        (b"a;b;c\r\n1;2;3\r\n1;2\r\n", "linha 3: esperados 3 campos, encontrados 2"),
+    ],
+)
+def test_ler_csv_rejeita_linha_com_quantidade_de_campos_diferente(conteudo: bytes, trecho: str):
+    with pytest.raises(CsvMalFormado, match=trecho):
+        ler_csv(conteudo)
+
+
+def test_ler_csv_so_com_cabecalho_devolve_colunas_sem_linhas():
+    df = ler_csv(ler_fixture("anp_so_cabecalho.csv"))
+    assert tuple(df.columns) == COLUNAS_ESPERADAS
+    assert df.empty
 
 
 def test_validar_arquivo_valido():

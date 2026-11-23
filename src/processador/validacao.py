@@ -4,6 +4,7 @@ Funções puras: recebem bytes ou DataFrame e devolvem DataFrame ou ResultadoVal
 Falha de dados nunca lança exceção; vira um ResultadoValidacao com os motivos.
 """
 
+import csv
 import io
 from dataclasses import dataclass, field
 
@@ -31,6 +32,10 @@ MAX_EXEMPLOS = 5
 FORMATO_DATA = "%d/%m/%Y"
 
 
+class CsvMalFormado(ValueError):
+    """CSV inconsistente: alguma linha tem quantidade de campos diferente do cabeçalho."""
+
+
 @dataclass(frozen=True)
 class ResultadoValidacao:
     valido: bool
@@ -46,11 +51,29 @@ def decodificar(conteudo: bytes) -> str:
 
 
 def ler_csv(conteudo: bytes) -> pd.DataFrame:
-    """Lê o CSV mantendo todas as colunas como texto. Arquivo vazio vira DataFrame vazio."""
+    """Lê o CSV mantendo todas as colunas como texto. Arquivo vazio vira DataFrame vazio.
+
+    Usa o módulo csv em vez de pd.read_csv porque o pandas, quando uma linha tem mais campos
+    que o cabeçalho, transforma os excedentes em índice e desloca as colunas sem avisar.
+    Levanta CsvMalFormado se alguma linha tiver quantidade de campos diferente do cabeçalho.
+    """
     texto = decodificar(conteudo)
     if not texto.strip():
         return pd.DataFrame()
-    return pd.read_csv(io.StringIO(texto), sep=";", dtype=str, keep_default_na=False)
+
+    leitor = csv.reader(io.StringIO(texto, newline=""), delimiter=";")
+    cabecalho = next(leitor)
+    linhas = []
+    for linha in leitor:
+        if not linha:
+            continue
+        if len(linha) != len(cabecalho):
+            raise CsvMalFormado(
+                f"linha {leitor.line_num}: esperados {len(cabecalho)} campos, "
+                f"encontrados {len(linha)}"
+            )
+        linhas.append(linha)
+    return pd.DataFrame(linhas, columns=cabecalho, dtype=str)
 
 
 def validar_schema(df: pd.DataFrame) -> ResultadoValidacao:
