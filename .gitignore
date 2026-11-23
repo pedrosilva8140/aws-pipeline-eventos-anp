@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Terraform (o .terraform.lock.hcl DEVE ser versionado)
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/terraform.tfvars
+infra/build/
+*.zip
+
+# Dados locais
+dados/
+
+# Contexto local do assistente
+CLAUDE.md
+.claude/
