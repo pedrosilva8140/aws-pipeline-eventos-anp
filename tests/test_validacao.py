@@ -126,8 +126,21 @@ def test_validar_schema_rejeita_arquivo_so_com_cabecalho():
 def test_validar_tipos_aponta_coluna_e_linha_invalidas(coluna: str, linha: str):
     resultado = validar_tipos(ler_csv(ler_fixture("anp_tipos_invalidos.csv")))
     assert not resultado.valido
-    motivo = next(m for m in resultado.motivos if m.startswith(coluna))
+    motivo = motivo_da_coluna(resultado.motivos, coluna)
     assert linha in motivo
+
+
+def motivo_da_coluna(motivos: list[str], coluna: str) -> str:
+    return next(m for m in motivos if f'"{coluna}"' in m)
+
+
+def test_validar_tipos_usa_formato_neutro_nos_motivos():
+    resultado = validar_tipos(ler_csv(ler_fixture("anp_tipos_invalidos.csv")))
+    assert resultado.motivos == [
+        "valor invalido em \"Valor de Venda\" (1 linha(s)): linha 2 ('abc')",
+        "valor invalido em \"Data da Coleta\" (1 linha(s)): linha 3 ('31/02/2026')",
+        "valor invalido em \"Produto\" (1 linha(s)): linha 4 ('')",
+    ]
 
 
 def test_validar_tipos_rejeita_valor_de_venda_zero_ou_negativo():
@@ -143,8 +156,8 @@ def test_validar_tipos_limita_exemplos_a_5():
     df = ler_csv(ler_fixture("anp_valido.csv"))
     df["Valor de Venda"] = "abc"
     resultado = validar_tipos(df)
-    motivo = next(m for m in resultado.motivos if m.startswith("Valor de Venda"))
-    assert "19 linha(s)" in motivo
+    motivo = motivo_da_coluna(resultado.motivos, "Valor de Venda")
+    assert "(19 linha(s))" in motivo
     assert motivo.count("linha ") == 5
 
 

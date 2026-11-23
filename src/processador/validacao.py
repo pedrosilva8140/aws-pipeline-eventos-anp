@@ -107,7 +107,7 @@ def descrever_invalidas(coluna: str, df: pd.DataFrame, invalidas: pd.Series) -> 
     posicoes = [i for i, ruim in enumerate(invalidas.to_numpy()) if ruim]
     # Linha no arquivo = posição + 2, porque o cabeçalho é a linha 1.
     exemplos = [f"linha {p + 2} ({df[coluna].iloc[p]!r})" for p in posicoes[:MAX_EXEMPLOS]]
-    return f"{coluna} invalido em {len(posicoes)} linha(s): " + ", ".join(exemplos)
+    return f'valor invalido em "{coluna}" ({len(posicoes)} linha(s)): ' + ", ".join(exemplos)
 
 
 def validar_tipos(df: pd.DataFrame) -> ResultadoValidacao:
