@@ -20,3 +20,5 @@ dados/
 CLAUDE.md
 .claude/
 skills-lock.json
+tfplan
+infra/tfplan

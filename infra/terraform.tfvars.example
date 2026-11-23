@@ -1,0 +1,2 @@
+# Copie para terraform.tfvars (fora do git) e preencha.
+email_alertas = "seu-email@exemplo.com"
