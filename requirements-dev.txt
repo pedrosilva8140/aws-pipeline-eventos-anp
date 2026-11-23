@@ -1,5 +1,4 @@
-pandas
-pyarrow
-boto3
-pytest
-ruff
+-r requirements.txt
+boto3==1.44.9
+pytest==9.2.0
+ruff==0.17.6
