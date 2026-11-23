@@ -4,12 +4,17 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
+from botocore.exceptions import ClientError
 
 from processador import handler
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BUCKET = "bucket-teste"
 TOPICO = "arn:aws:sns:us-east-1:000000000000:alertas-teste"
+
+
+def erro_aws(codigo: str, operacao: str) -> ClientError:
+    return ClientError({"Error": {"Code": codigo, "Message": codigo}}, operacao)
 
 
 class S3Falso:
@@ -22,6 +27,8 @@ class S3Falso:
 
     def get_object(self, Bucket: str, Key: str) -> dict:
         self.leituras.append(Key)
+        if (Bucket, Key) not in self.objetos:
+            raise erro_aws("NoSuchKey", "GetObject")
         return {"Body": io.BytesIO(self.objetos[(Bucket, Key)])}
 
     def put_object(self, Bucket: str, Key: str, Body: bytes, **_: object) -> dict:
@@ -43,10 +50,13 @@ class S3Falso:
 
 
 class SNSFalso:
-    def __init__(self) -> None:
+    def __init__(self, falhar: bool = False) -> None:
         self.publicacoes: list[dict] = []
+        self.falhar = falhar
 
     def publish(self, **kwargs: object) -> dict:
+        if self.falhar:
+            raise erro_aws("InternalError", "Publish")
         self.publicacoes.append(kwargs)
         return {"MessageId": "1"}
 
@@ -187,9 +197,41 @@ def test_nunca_grava_em_entrada(s3: S3Falso, sns: SNSFalso):
     assert not any(chave.startswith("entrada/") for chave in s3.escritas)
 
 
-def test_erro_de_infra_propaga_excecao(s3: S3Falso, sns: SNSFalso):
-    with pytest.raises(KeyError):
-        processar(s3, sns, "entrada/nao-existe.csv")
+def test_erro_de_infra_propaga_excecao(s3: S3Falso, sns: SNSFalso, monkeypatch):
+    colocar(s3, "entrada/bom.csv", "anp_valido.csv")
+
+    def negar(**_: object) -> dict:
+        raise erro_aws("AccessDenied", "GetObject")
+
+    monkeypatch.setattr(s3, "get_object", negar)
+
+    with pytest.raises(ClientError, match="AccessDenied"):
+        processar(s3, sns, "entrada/bom.csv")
+
+
+def test_arquivo_que_nao_existe_mais_e_tratado_como_ja_processado(s3: S3Falso, sns: SNSFalso):
+    [resultado] = processar(s3, sns, "entrada/sumiu.csv")
+
+    assert resultado == {"arquivo": "entrada/sumiu.csv", "status": "ja_processado"}
+    assert s3.escritas == []
+    assert sns.publicacoes == []
+
+
+def test_falha_no_sns_mantem_arquivo_em_entrada_e_retentativa_conclui(s3: S3Falso):
+    original = colocar(s3, "entrada/ruim.csv", "anp_schema_invalido.csv")
+
+    with pytest.raises(ClientError, match="InternalError"):
+        processar(s3, SNSFalso(falhar=True), "entrada/ruim.csv")
+
+    assert s3.objetos[(BUCKET, "entrada/ruim.csv")] == original
+
+    sns_ok = SNSFalso()
+    [resultado] = processar(s3, sns_ok, "entrada/ruim.csv")
+
+    assert resultado["status"] == "rejeitado"
+    assert len(sns_ok.publicacoes) == 1
+    assert (BUCKET, "entrada/ruim.csv") not in s3.objetos
+    assert s3.objetos[(BUCKET, "rejeitado/ruim.csv")] == original
 
 
 def test_lambda_handler_usa_clientes_e_topico_do_ambiente(

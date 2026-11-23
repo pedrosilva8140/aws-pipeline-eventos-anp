@@ -5,6 +5,8 @@ Só orquestra: lê o evento, acessa S3/SNS e chama as funções puras.
   Não lança exceção.
 - Falha de infra (S3/SNS): a exceção sobe para a Lambda tentar de novo e, depois, ir para a DLQ.
 - Nunca grava em entrada/ (evita loop de eventos).
+- Idempotente com retentativas: o arquivo só sai de entrada/ depois do alerta no SNS, e um
+  arquivo que não existe mais em entrada/ é tratado como já processado.
 """
 
 import json
@@ -15,6 +17,8 @@ from functools import cache
 from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import unquote_plus
+
+from botocore.exceptions import ClientError
 
 from processador.transformacao import chave_saida, dividir_por_mes, para_parquet, transformar
 from processador.validacao import CsvMalFormado, ler_csv, validar
@@ -55,7 +59,13 @@ def processar_arquivo(bucket: str, chave: str, s3: Any, sns: Any, topico_arn: st
     if not chave.startswith(PREFIXO_ENTRADA) or not chave.lower().endswith(".csv"):
         return {"arquivo": chave, "status": "ignorado"}
 
-    conteudo = s3.get_object(Bucket=bucket, Key=chave)["Body"].read()
+    try:
+        conteudo = s3.get_object(Bucket=bucket, Key=chave)["Body"].read()
+    except ClientError as erro:
+        if erro.response.get("Error", {}).get("Code") != "NoSuchKey":
+            raise
+        # Retentativa de um evento cujo arquivo já foi movido para rejeitado/.
+        return {"arquivo": chave, "status": "ja_processado"}
 
     try:
         df = ler_csv(conteudo)
@@ -89,8 +99,9 @@ def rejeitar(
     }
     corpo = json.dumps(relatorio, ensure_ascii=False, indent=2)
 
+    # Ordem importa: o arquivo só sai de entrada/ depois do alerta. Se algo falhar antes,
+    # a retentativa encontra o arquivo e refaz tudo (no pior caso, o alerta chega duas vezes).
     s3.copy_object(Bucket=bucket, Key=destino, CopySource={"Bucket": bucket, "Key": chave})
-    s3.delete_object(Bucket=bucket, Key=chave)
     s3.put_object(
         Bucket=bucket,
         Key=f"{PREFIXO_REJEITADO}{nome.stem}.json",
@@ -102,4 +113,5 @@ def rejeitar(
         Subject=f"Arquivo rejeitado: {nome.name}"[:LIMITE_ASSUNTO_SNS],
         Message=corpo,
     )
+    s3.delete_object(Bucket=bucket, Key=chave)
     return {"arquivo": chave, "status": "rejeitado", "motivos": motivos}
