@@ -24,7 +24,8 @@ ARQUIVO_ZIP = PASTA_BUILD / "lambda.zip"
 REQUIREMENTS = RAIZ / "requirements.txt"
 CODIGO = RAIZ / "src" / "processador"
 
-LIMITE_DESCOMPACTADO_MB = 250
+# A Lambda aceita até 250 MB descompactado; 245 deixa margem para o próprio código crescer.
+LIMITE_DESCOMPACTADO_MB = 245
 PASTAS_REMOVIDAS = {"__pycache__", "tests"}
 DATA_FIXA = (1980, 1, 1, 0, 0, 0)
 
@@ -90,7 +91,9 @@ def relatorio() -> float:
     arquivos = [p for p in PASTA_PACOTE.rglob("*") if p.is_file()]
     descompactado = tamanho_mb(arquivos)
     print(f"Arquivos no pacote: {len(arquivos)}")
-    print(f"Descompactado: {descompactado:.1f} MB (limite da Lambda: {LIMITE_DESCOMPACTADO_MB} MB)")
+    print(
+        f"Descompactado: {descompactado:.1f} MB (limite do projeto: {LIMITE_DESCOMPACTADO_MB} MB)"
+    )
     print(f"Zipado: {tamanho_mb([ARQUIVO_ZIP]):.1f} MB -> {ARQUIVO_ZIP.relative_to(RAIZ)}")
     print("Maiores pastas de primeiro nivel:")
     pastas = [p for p in PASTA_PACOTE.iterdir() if p.is_dir()]
