@@ -1,7 +1,7 @@
 variable "regiao" {
-  description = "Região da AWS."
+  description = "Região da AWS. us-east-2 porque a SCP regional do projeto AWS nega quase tudo em us-east-1."
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "projeto" {
