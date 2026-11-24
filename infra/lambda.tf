@@ -12,8 +12,8 @@ resource "aws_lambda_function" "processador" {
   memory_size   = var.memoria_lambda_mb
   timeout       = var.timeout_lambda_segundos
 
-  # Sem layer: dependências vão no pacote (ver CLAUDE.md). O pacote vem do S3 porque
-  # passa do limite de upload direto (50 MB zipado).
+  # Sem layer: dependências vão no pacote (ver arquivo local de regras do projeto).
+  # O pacote vem do S3 porque passa do limite de upload direto (50 MB zipado).
   s3_bucket        = aws_s3_object.pacote_lambda.bucket
   s3_key           = aws_s3_object.pacote_lambda.key
   source_code_hash = filebase64sha256(local.caminho_pacote)

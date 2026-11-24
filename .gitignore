@@ -12,13 +12,8 @@ infra/*.tfstate.*
 infra/terraform.tfvars
 infra/build/
 *.zip
+tfplan
+infra/tfplan
 
 # Dados locais
 dados/
-
-# Contexto local do assistente
-CLAUDE.md
-.claude/
-skills-lock.json
-tfplan
-infra/tfplan
